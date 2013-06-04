@@ -102,6 +102,12 @@
         eventNew: function(calEvent, element, dayFreeBusyManager, 
                                                     calendar, mouseupEvent) {
         },
+        eventCreateStart: function() {
+          
+        },
+        eventCreateEnd: function() {
+          
+        },
         eventMouseover: function(calEvent, $event) {
         },
         eventMouseout: function(calEvent, $event) {
@@ -1075,6 +1081,10 @@
             if ($target.hasClass('wc-day-column-inner')) {
 
                 var $newEvent = $('<div class=\"wc-cal-event wc-new-cal-event wc-new-cal-event-creating\"></div>');
+                
+                if(options.eventCreateStart && typeof options.eventCreateStart === "function") {
+                  options.eventCreateStart($newEvent, options.timeslotHeight);
+                } 
 
                 $newEvent.css({lineHeight: (options.timeslotHeight - 2) + 'px', fontSize: (options.timeslotHeight / 2) + 'px'});
                 $target.append($newEvent);
@@ -1089,7 +1099,9 @@
                   $target.bind('mousemove.newevent', function(event) {
                     $newEvent.show();
                     $newEvent.addClass('ui-resizable-resizing');
-                    var height = Math.round(event.pageY - columnOffset - topPosition);
+                    var top = $newEvent.offset().top;
+                    var height = Math.round(event.pageY - top);
+                    //var height = Math.round(event.pageY - columnOffset - topPosition);
                     var remainder = height % options.timeslotHeight;
                     //snap to closest timeslot
                     if (remainder < 0) {
@@ -1106,6 +1118,10 @@
             }
 
           }).mouseup(function(event) {
+            if(options.eventCreateEnd && typeof options.eventCreateEnd === "function") {
+              options.eventCreateEnd();
+            }
+            
             var $target = $(event.target);
 
             var $weekDay = $target.closest('.wc-day-column-inner');
