@@ -521,6 +521,67 @@
       getCurrentLastDay: function() {
         return this._addDays(this.getCurrentFirstDay(), this.options.daysToShow - 1);
       },
+      /**
+       * This function <b>MUST</b> be called after a new event has been created by the user.
+       * It was implement as a public member of the weekday UI widget to allow the creation
+       * process of an event to be finished externally of the weekday class.
+       * @param $weekday Mandatory parameter which holds the active row (i.e., the selected day)
+       * @param [event] This parameter is optional and only given if the event was created by the browser.
+       */
+      finishCreateEvent: function($weekDay, event) {
+        var options = this.options;
+        
+        if(options.eventCreateEnd && typeof options.eventCreateEnd === "function") {
+          options.eventCreateEnd();
+        }
+        
+        var $newEvent = $weekDay.find('.wc-new-cal-event-creating');
+
+        if ($newEvent.length) {
+            var createdFromSingleClick = !$newEvent.hasClass('ui-resizable-resizing');
+
+            //if even created from a single click only, default height
+            if (createdFromSingleClick) {
+              $newEvent.css({height: options.timeslotHeight * options.defaultEventLength}).show();
+            }
+            var top = parseInt($newEvent.css('top'));
+            var eventDuration = this._getEventDurationFromPositionedEventElement($weekDay, $newEvent, top);
+
+            $newEvent.remove();
+            var newCalEvent = {start: eventDuration.start, end: eventDuration.end, title: options.newEventText};
+            var showAsSeparatedUser = options.showAsSeparateUsers && options.users && options.users.length;
+
+            if (showAsSeparatedUser) {
+              newCalEvent = this._setEventUserId(newCalEvent, $weekDay.data('wcUserId'));
+            }
+            else if (!options.showAsSeparateUsers && options.users && options.users.length == 1) {
+              newCalEvent = this._setEventUserId(newCalEvent, this._getUserIdFromIndex(0));
+            }
+
+            var freeBusyManager = this.getFreeBusyManagerForEvent(newCalEvent);
+
+            var $renderedCalEvent = this._renderEvent(newCalEvent, $weekDay);
+
+            if (!options.allowCalEventOverlap) {
+              this._adjustForEventCollisions($weekDay, $renderedCalEvent, newCalEvent, newCalEvent);
+              this._positionEvent($weekDay, $renderedCalEvent);
+            } else {
+              this._adjustOverlappingEvents($weekDay);
+            }
+
+            var proceed = this._trigger('beforeEventNew', event ? event : null, {
+              'calEvent': newCalEvent,
+              'createdFromSingleClick': createdFromSingleClick,
+              'calendar': this.element
+            });
+            if (proceed) {
+              options.eventNew(newCalEvent, $renderedCalEvent, freeBusyManager, this.element, event);
+            }
+            else {
+              $($renderedCalEvent).remove();
+            }
+        }
+      },
 
       /*********************
         * private functions *
@@ -1083,7 +1144,7 @@
                 var $newEvent = $('<div class=\"wc-cal-event wc-new-cal-event wc-new-cal-event-creating\"></div>');
                 
                 if(options.eventCreateStart && typeof options.eventCreateStart === "function") {
-                  options.eventCreateStart($newEvent, options.timeslotHeight);
+                  options.eventCreateStart($newEvent, $weekDay, options.timeslotHeight);
                 } 
 
                 $newEvent.css({lineHeight: (options.timeslotHeight - 2) + 'px', fontSize: (options.timeslotHeight / 2) + 'px'});
@@ -1118,59 +1179,12 @@
             }
 
           }).mouseup(function(event) {
-            if(options.eventCreateEnd && typeof options.eventCreateEnd === "function") {
-              options.eventCreateEnd();
-            }
-            
             var $target = $(event.target);
 
             var $weekDay = $target.closest('.wc-day-column-inner');
-            var $newEvent = $weekDay.find('.wc-new-cal-event-creating');
-
-            if ($newEvent.length) {
-                var createdFromSingleClick = !$newEvent.hasClass('ui-resizable-resizing');
-
-                //if even created from a single click only, default height
-                if (createdFromSingleClick) {
-                  $newEvent.css({height: options.timeslotHeight * options.defaultEventLength}).show();
-                }
-                var top = parseInt($newEvent.css('top'));
-                var eventDuration = self._getEventDurationFromPositionedEventElement($weekDay, $newEvent, top);
-
-                $newEvent.remove();
-                var newCalEvent = {start: eventDuration.start, end: eventDuration.end, title: options.newEventText};
-                var showAsSeparatedUser = options.showAsSeparateUsers && options.users && options.users.length;
-
-                if (showAsSeparatedUser) {
-                  newCalEvent = self._setEventUserId(newCalEvent, $weekDay.data('wcUserId'));
-                }
-                else if (!options.showAsSeparateUsers && options.users && options.users.length == 1) {
-                  newCalEvent = self._setEventUserId(newCalEvent, self._getUserIdFromIndex(0));
-                }
-
-                var freeBusyManager = self.getFreeBusyManagerForEvent(newCalEvent);
-
-                var $renderedCalEvent = self._renderEvent(newCalEvent, $weekDay);
-
-                if (!options.allowCalEventOverlap) {
-                  self._adjustForEventCollisions($weekDay, $renderedCalEvent, newCalEvent, newCalEvent);
-                  self._positionEvent($weekDay, $renderedCalEvent);
-                } else {
-                  self._adjustOverlappingEvents($weekDay);
-                }
-
-                var proceed = self._trigger('beforeEventNew', event, {
-                  'calEvent': newCalEvent,
-                  'createdFromSingleClick': createdFromSingleClick,
-                  'calendar': self.element
-                });
-  							if (proceed) {
-									options.eventNew(newCalEvent, $renderedCalEvent, freeBusyManager, self.element, event);
-								}
-								else {
-									$($renderedCalEvent).remove();
-								}
-            }
+            
+            // finish event creation
+            self.finishCreateEvent($weekDay, event);
           });
       },
 
